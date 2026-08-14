@@ -2,6 +2,15 @@
 
 把 DeepSeek Harness 的 Web UI 包进一个原生桌面窗口,双击即用。
 
+## 定位:轻量壳,不碰官方 UI
+
+- **只做基本的打包**:壳仅仅把 DSH Web UI 装进一个原生窗口,页面内容与浏览器
+  打开 `http://127.0.0.1:3080` 看到的**完全一致**,完全遵循官方 UI;
+- **不影响任何 UI 插件**:皮肤、侧边栏、会话插件等全部照常工作;壳只注入
+  窗口边框层(顶部拖动条与窗口按钮),不修改 DSH 的任何页面结构或 UI 面板;
+- **仅加入窗口层按键**:全屏、最小化、最大化、关闭都属于窗口边框层,
+  不进入 DSH 的页面 UI。
+
 ## 工作原理
 
 1. 启动时探测 `http://127.0.0.1:3080`(端口可在 `config.json` 改):
@@ -29,11 +38,20 @@
 
 ```powershell
 npm install
-npm run dist
+npm run dist:dir
 ```
 
-产物在 `release\win-unpacked\DSH Desktop.exe`。右键它 →「发送到」→「桌面快捷方式」即可。
-**注意:移动整个项目文件夹后,桌面快捷方式需要重新创建。**
+产物在 `release\win-unpacked\DSH Desktop.exe`,双击即可运行
+(绿色版不含安装器,不会自动创建快捷方式)。
+
+**创建桌面快捷方式(手动,一步)**:
+
+1. 右键 `DSH Desktop.exe`;
+2. Windows 11:点「显示更多选项」→「发送到」→「桌面快捷方式」
+   (Windows 10 直接有「发送到」);
+3. 桌面出现「DSH Desktop - 快捷方式」,双击即用,图标自动使用壳的图标。
+
+**注意:移动项目文件夹后,快捷方式需要重新创建。**
 
 ### 开发模式(改了代码想快速试)
 
@@ -86,13 +104,31 @@ npm run dist
 
 ## 发布到 GitHub
 
+1. 在 github.com 新建仓库(建议 Public),创建时或之后在
+   **仓库 Settings → Topics** 添加主题标签 `dsh-plugin`
+   (添加后该仓库会出现在 <https://github.com/topics/dsh-plugin>);
+2. 本地推送:
+
+```powershell
+git remote add origin https://github.com/<你的用户名>/<仓库名>.git
+git branch -M main
+git push -u origin main
+```
+
+   推送时 GitHub 要求认证:用户名 + **Personal Access Token**(不是密码,
+   在 GitHub Settings → Developer settings 生成,勾选 repo 权限);
+   也可以直接用 GitHub Desktop 登录后点 Push,更省事;
+3. 发版:把 `release\DSH-Desktop-0.1.0-win-x64.zip` 上传到仓库
+   **Releases** 页面(tag 填 `v0.1.0`),并在说明里附上使用方式。
+
 仓库不含任何机器私有路径(DSH 目录自动探测),clone 后:
 
 ```powershell
 npm install
 npm start          # 开发模式,直接跑
 # 或
-npm run dist       # 出绿色版 + 安装器
+npm run dist:dir   # 出绿色版目录
+npm run dist       # 绿色版目录 + 安装器
 ```
 
 提交前确认 `config.json` 的 `start.cwd` 是空或相对路径,别把本机绝对路径提交上去。
