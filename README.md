@@ -102,39 +102,12 @@ npm run dist
 
 未签名安装包首次运行时 Windows SmartScreen 会提示,选「更多信息 → 仍要运行」即可。
 
-## 发布到 GitHub
-
-1. 在 github.com 新建仓库(建议 Public),创建时或之后在
-   **仓库 Settings → Topics** 添加主题标签 `dsh-plugin`
-   (添加后该仓库会出现在 <https://github.com/topics/dsh-plugin>);
-2. 本地推送:
-
-```powershell
-git remote add origin https://github.com/<你的用户名>/<仓库名>.git
-git branch -M main
-git push -u origin main
-```
-
-   推送时 GitHub 要求认证:用户名 + **Personal Access Token**(不是密码,
-   在 GitHub Settings → Developer settings 生成,勾选 repo 权限);
-   也可以直接用 GitHub Desktop 登录后点 Push,更省事;
-3. 发版:把 `release\DSH-Desktop-0.1.0-win-x64.zip` 上传到仓库
-   **Releases** 页面(tag 填 `v0.1.0`),并在说明里附上使用方式。
-
-仓库不含任何机器私有路径(DSH 目录自动探测),clone 后:
-
-```powershell
-npm install
-npm start          # 开发模式,直接跑
-# 或
-npm run dist:dir   # 出绿色版目录
-npm run dist       # 绿色版目录 + 安装器
-```
-
-提交前确认 `config.json` 的 `start.cwd` 是空或相对路径,别把本机绝对路径提交上去。
-
 ## 注意事项
 
 - 不要同时手动跑 DSH 又期望壳再开一个:壳发现端口被占会直接复用,这是特性。
 - 想让壳"自己启动服务",需要先停掉所有占用 3080 的 DSH 实例。
 - 快捷方式图标默认取自打包配置里的 `assets/icon.png`。
+
+## License
+
+[MIT](./LICENSE)
