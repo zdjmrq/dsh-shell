@@ -1,0 +1,11 @@
+{
+  "port": 3080,
+  "start": {
+    "cwd": "",
+    "command": "pnpm dsh web"
+  },
+  "window": {
+    "overlay": true,
+    "overlayHeight": 36
+  }
+}
