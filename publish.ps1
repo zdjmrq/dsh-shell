@@ -1,4 +1,4 @@
-﻿# publish.ps1 — 把 dsh-shell 一键发布到 GitHub
+# publish.ps1 — 把 dsh-shell 一键发布到 GitHub
 # 自动完成:建仓库 → 打 dsh-plugin 主题标签 → 推代码 → 发 Release 并上传 zip
 #
 # 用法(推荐,Token 不进入命令历史):
@@ -96,7 +96,8 @@ try {
 }
 $assetName = Split-Path $zip -Leaf
 $uploadUrl = ($release.upload_url -replace '\{[^}]*\}$', '') + '?name=' + [uri]::EscapeDataString($assetName)
-& curl.exe -sS -X POST -H "Authorization: Bearer $Token" -H 'Content-Type: application/zip' `
+# --ssl-no-revoke:Windows 自带 curl 的 schannel 证书吊销检查偶尔误报(exit 35),跳过不影响安全性
+& curl.exe -sS --ssl-no-revoke -X POST -H "Authorization: Bearer $Token" -H 'Content-Type: application/zip' `
   --data-binary "@$zip" $uploadUrl | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "zip 上传失败(curl exit $LASTEXITCODE),网络问题可直接重试本脚本" }
 
