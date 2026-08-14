@@ -1,6 +1,6 @@
 'use strict'
 
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, shell, ipcMain, nativeImage } = require('electron')
 const { spawn, execFile } = require('child_process')
 const net = require('net')
 const path = require('path')
@@ -325,6 +325,77 @@ const OVERLAY_JS = `(() => {
     mx.innerHTML = value ? icons.restore : icons.max
     mx.title = value ? '还原' : '最大化'
   })
+  // ---- 注意力提醒:轮询 /dsh-attention + 活动检测,把状态上报壳 ----
+  // 需要提醒 = 介入(审批/提问挂起)或未确认的完成事件;
+  // "你不在" = 窗口失焦/最小化,或聚焦但超过 attnIdleMs 无任何操作。
+  // 任一交互(鼠标移动/点击/滚轮/键盘/触摸)或窗口重新聚焦 = 回到对话。
+  let attnKind = 'none'
+  let attnFocused = true
+  let attnBaseline = false
+  let attnLastCompletedId = null
+  let attnPendingCompletion = null
+  let attnAckedCompletion = null
+  let attnLastActivity = Date.now()
+  const attnIdleMs = 8000
+  if (api.onFocusChange) {
+    api.onFocusChange((value) => {
+      attnFocused = !!value
+      if (value) attnLastActivity = Date.now()
+    })
+  }
+  const markActivity = () => { attnLastActivity = Date.now() }
+  for (const ev of ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart']) {
+    document.addEventListener(ev, markActivity, { passive: true })
+  }
+  function setAttn(kind) {
+    if (kind === attnKind) return
+    attnKind = kind
+    if (api.setAttention) api.setAttention({ kind })
+  }
+  function pollAttention() {
+    fetch('/dsh-attention', { cache: 'no-store' }).then((res) => {
+      if (!res.ok) return null
+      return res.json()
+    }).then((state) => {
+      if (!state || typeof state !== 'object') return
+      if (!attnBaseline) { attnBaseline = true; attnLastCompletedId = state.completedId; return }
+      const away = !attnFocused || (Date.now() - attnLastActivity > attnIdleMs)
+      if (state.intervention) {
+        if (away) setAttn('intervention')
+        else setAttn('none')
+        return
+      }
+      if (state.completedId !== attnLastCompletedId) {
+        attnLastCompletedId = state.completedId
+        attnPendingCompletion = { id: state.completedId, at: state.completedAt }
+      }
+      if (attnPendingCompletion) {
+        if (state.running) {
+          attnPendingCompletion = null
+        } else {
+          const age = Date.now() - attnPendingCompletion.at
+          if (age >= 2500) {
+            if (!away) {
+              // 你一直在看:视为已看到,不闪
+              attnAckedCompletion = attnPendingCompletion.id
+              attnPendingCompletion = null
+            } else if (attnAckedCompletion !== attnPendingCompletion.id) {
+              setAttn('done')
+              attnAckedCompletion = attnPendingCompletion.id
+              attnPendingCompletion = null
+            }
+          }
+        }
+      }
+      if ((attnKind === 'intervention' || attnKind === 'done') && !away) {
+        setAttn('none')
+      }
+    }).catch(() => {})
+  }
+  if (api.setAttention) {
+    setInterval(pollAttention, 1000)
+    pollAttention()
+  }
   document.addEventListener('mousemove', (event) => {
     if (!isFullscreen) return
     if (event.clientY <= 60) showBar()
@@ -352,6 +423,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // 最小化/遮挡时页面定时器不节流:注意力轮询必须照常跑,闪烁不延迟
+      backgroundThrottling: false,
     }
   }
   win = new BrowserWindow(options)
@@ -384,6 +457,44 @@ function createWindow() {
   win.on('leave-full-screen', () => win.webContents.send('dsh:fullscreen-changed', false))
   win.on('maximize', () => win.webContents.send('dsh:maximized-changed', true))
   win.on('unmaximize', () => win.webContents.send('dsh:maximized-changed', false))
+
+  // ---------- 注意力提醒:有限闪烁 → 常驻淡红(微信式) ----------
+  // DSH 页面内插件经 preload 桥上报状态,主进程只做窗口层呈现。
+  // 介入与完成同款:页面判定"你不在"(失焦/最小化/聚焦但闲置 8 秒)后上报,
+  // 主进程用 flashFrame 触发任务栏闪烁;Electron 的 flashFrame 是有限次数
+  // 闪烁(闪几轮后按钮停留高亮态,即微信"常驻淡红"),直到收到 none(用户
+  // 回到对话:聚焦或窗口内有操作)或窗口激活才恢复。
+  let attention = { kind: 'none' }
+
+  function stopAttentionFx() {
+    if (win && !win.isDestroyed()) {
+      win.flashFrame(false)
+      win.setOverlayIcon(null, '')
+    }
+  }
+
+  function renderAttention() {
+    // 完全信任页面的"你不在"判定(失焦/最小化/闲置 8 秒),不再按窗口聚焦
+    // 自行拦截 —— 旧拦截会把"聚焦发呆"场景吞掉。
+    stopAttentionFx()
+    if (attention.kind === 'none') return
+    log(`attention: ${attention.kind}`)
+    win.flashFrame(true)
+  }
+
+  ipcMain.on('dsh:attention', (_event, state) => {
+    const kind = state && typeof state.kind === 'string' ? state.kind : 'none'
+    if (kind !== 'none' && kind !== 'intervention' && kind !== 'done') return
+    attention.kind = kind
+    renderAttention()
+  })
+
+  // 窗口聚焦状态推给页面(插件据此决定是否提醒);聚焦即清呈现
+  win.on('focus', () => {
+    win.webContents.send('dsh:focus-changed', true)
+    if (attention.kind !== 'none') renderAttention()
+  })
+  win.on('blur', () => win.webContents.send('dsh:focus-changed', false))
 
   // F11 完全全屏(隐藏任务栏),Esc 退出全屏。
   win.webContents.on('before-input-event', (event, input) => {
@@ -419,7 +530,10 @@ function createWindow() {
     if (!isMainFrame || code === -3) return
     showError(`页面加载失败: ${desc} (${code})\n${url}`)
   })
-  win.on('closed', () => { win = null })
+  win.on('closed', () => {
+    stopAttentionFx()
+    win = null
+  })
 
   boot().catch((err) => {
     log('启动流程异常: ' + (err && err.stack ? err.stack : err))
