@@ -140,6 +140,10 @@ npm run dist
   [dsh-attention-notifier](https://github.com/zdjmrq/dsh-attention-notifier)),
   没装时任务栏不会闪烁。
 
+## 📖 文字开源描述
+
+本壳在「文字开源」枢纽仓库 [dsh-text-open-source](https://github.com/zdjmrq/dsh-text-open-source) 中配有完整描述（功能 / 技术路线 / 结构 / 关键实现 / 复刻提示词，不依赖代码即可复刻、便于理解与微调）：[plugins/dsh-shell.md](https://github.com/zdjmrq/dsh-text-open-source/blob/main/plugins/dsh-shell.md)。
+
 ## License
 
 [MIT](./LICENSE)
