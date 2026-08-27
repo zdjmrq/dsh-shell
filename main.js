@@ -9,6 +9,7 @@ const fs = require('fs')
 const APP_TITLE = 'DeepSeek Harness'
 const START_TIMEOUT_MS = 120000
 const POLL_INTERVAL_MS = 700
+const LAUNCH_URL_TIMEOUT_MS = 10000
 
 // ---------- 配置 ----------
 // 打包版:读取 exe 旁边的 config.json(方便用户改);
@@ -114,9 +115,33 @@ function waitForServer(getServerExited) {
 
 let spawnedProc = null
 let stopping = false
+let announcedLaunchUrl = null
+
+function captureLaunchUrl(line) {
+  const match = String(line).match(/\bdsh web:\s+(https?:\/\/[^\s)]+)/i)
+  if (!match) return
+  try {
+    const candidate = new URL(match[1])
+    const expectedPort = String(cfg.port)
+    if (!['127.0.0.1', 'localhost'].includes(candidate.hostname) || candidate.port !== expectedPort) return
+    announcedLaunchUrl = candidate.href
+  } catch {
+    // Ignore unrelated or malformed output; the normal timeout handles absence.
+  }
+}
+
+async function waitForLaunchUrl() {
+  const deadline = Date.now() + LAUNCH_URL_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    if (announcedLaunchUrl) return announcedLaunchUrl
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  return null
+}
 
 function startServer(onExit) {
   return new Promise((resolve, reject) => {
+    announcedLaunchUrl = null
     log(`启动服务: ${cfg.start.command} (cwd: ${cfg.start.cwd})`)
     const child = spawn('cmd.exe', ['/d', '/s', '/c', cfg.start.command], {
       cwd: cfg.start.cwd,
@@ -134,7 +159,10 @@ function startServer(onExit) {
         while ((idx = buf.indexOf('\n')) >= 0) {
           const line = buf.slice(0, idx).replace(/\r$/, '')
           buf = buf.slice(idx + 1)
-          if (line.trim()) log(`${tag} ${line}`)
+          if (line.trim()) {
+            captureLaunchUrl(line)
+            log(`${tag} ${line}`)
+          }
         }
       })
       stream.on('end', () => {
@@ -210,6 +238,7 @@ let win = null
 
 async function boot() {
   const alreadyUp = await portInUse()
+  let targetUrl = BASE_URL
   if (!alreadyUp) {
     if (!cfg.start.cwd) {
       showError(`找不到 DeepSeek Harness checkout(自动探测失败)。\n\n` +
@@ -238,9 +267,10 @@ async function boot() {
         `请检查启动命令是否可用:\ncd "${cfg.start.cwd}"\n${cfg.start.command}`)
       return
     }
+    targetUrl = await waitForLaunchUrl() ?? BASE_URL
   }
-  log(`打开 ${BASE_URL}`)
-  await win.loadURL(BASE_URL)
+  log(`打开 ${targetUrl}`)
+  await win.loadURL(targetUrl)
 }
 
 // ---------- 自定义顶栏(注入 DSH 页面) ----------
