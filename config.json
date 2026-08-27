@@ -2,7 +2,7 @@
   "port": 3080,
   "start": {
     "cwd": "",
-    "command": "pnpm dsh web"
+    "command": "pnpm dsh web --no-open"
   },
   "window": {
     "overlay": true,
