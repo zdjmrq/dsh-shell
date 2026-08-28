@@ -32,12 +32,15 @@
 - 不想用无边框:把 exe 旁 `config.json` 的 `window.overlay` 改为 `false`,
   回到传统原生标题栏(此时 F11/Esc 全屏仍可用)。
 
-## 任务栏提醒(需 DSH 侧提醒插件配合)
+## 任务栏提醒(需 DSH 侧提醒插件配合,推荐配套 [dsh-attention-notifier](https://github.com/zdjmrq/dsh-attention-notifier))
 
-DSH 内的提醒插件会把状态挂在 `GET /dsh-attention`(审批/提问挂起、一轮工作
-完成),壳注入的页面轮询器读取它,经桥(`window.dshShell.setAttention`)上报,
-主进程在 Windows 任务栏用系统级按钮闪烁(微信新消息同款机制,按钮整体明暗
-呼吸)给出提醒,**介入与完成同款**:
+任务栏提醒需要 DSH 侧提醒插件配合,**推荐配套使用
+[dsh-attention-notifier](https://github.com/zdjmrq/dsh-attention-notifier)**
+(宿主层持久化插件,只做判定、不碰 UI、自带 `stats` 自诊断),按其 README
+装好后把状态挂在 `GET /dsh-attention`(审批/提问挂起、一轮工作完成)。壳注入
+的页面轮询器读取它,经桥(`window.dshShell.setAttention`)上报,主进程在
+Windows 任务栏用系统级按钮闪烁(微信新消息同款机制,按钮整体明暗呼吸)给出
+提醒,**介入与完成同款**:
 
 - **需要介入**(审批/提问等待处理)或**一轮工作完成**后,只要"你没在关注"
   —— 窗口失焦/最小化,或聚焦但超过 8 秒没有任何操作 —— 任务栏按钮就闪烁
@@ -45,7 +48,18 @@ DSH 内的提醒插件会把状态挂在 `GET /dsh-attention`(审批/提问挂�
 - **回到对话**(窗口聚焦,或窗口内任意鼠标移动/点击/滚轮/键盘操作)立即熄灭;
 - 完成事件若发生在你正活跃地看着窗口时,视为已看到,不闪。
 
-壳本身不探测 DSH 页面状态,只提供窗口层通道,与"轻量壳、不碰官方 UI"的定位一致。
+壳只消费 `GET /dsh-attention` 这一个契约(字段定义见
+dsh-attention-notifier 的 README),**任何实现同一契约的提醒插件都能配合
+使用**,不绑定具体实现;没装这类插件时壳不探测 DSH 页面状态、任务栏也不
+闪烁 —— 与"轻量壳、不碰官方 UI"的定位一致。
+
+### 配合安装(一次性)
+
+1. 按 [dsh-attention-notifier](https://github.com/zdjmrq/dsh-attention-notifier)
+   的 README 把插件装进 DSH(宿主层即可,所有预设、所有会话自动生效);
+2. 重启 DSH(直接关掉壳重开即可)后验证:
+   `Invoke-WebRequest http://127.0.0.1:3080/dsh-attention` 返回 JSON 即就绪;
+3. 之后正常使用,无需其他配置。
 
 ## 使用
 
@@ -122,6 +136,13 @@ npm run dist
 - 不要同时手动跑 DSH 又期望壳再开一个:壳发现端口被占会直接复用,这是特性。
 - 想让壳"自己启动服务",需要先停掉所有占用 3080 的 DSH 实例。
 - 快捷方式图标默认取自打包配置里的 `assets/icon.png`。
+- 任务栏提醒需要 DSH 侧装提醒插件(推荐
+  [dsh-attention-notifier](https://github.com/zdjmrq/dsh-attention-notifier)),
+  没装时任务栏不会闪烁。
+
+## 📖 文字开源描述
+
+本壳在「文字开源」枢纽仓库 [dsh-text-open-source](https://github.com/zdjmrq/dsh-text-open-source) 中配有完整描述（功能 / 技术路线 / 结构 / 关键实现 / 复刻提示词，不依赖代码即可复刻、便于理解与微调）：[plugins/dsh-shell.md](https://github.com/zdjmrq/dsh-text-open-source/blob/main/plugins/dsh-shell.md)。
 
 ## License
 
